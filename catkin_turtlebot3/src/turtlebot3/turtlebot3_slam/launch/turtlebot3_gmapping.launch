@@ -11,6 +11,8 @@
     <param name="base_frame" value="$(arg set_base_frame)"/>
     <param name="odom_frame" value="$(arg set_odom_frame)"/>
     <param name="map_frame"  value="$(arg set_map_frame)"/>
+    <!-- scan topic: 取消注释就用去畸变数据 -->
+    <!-- <remap from="scan" to="/scan_corrected"/> -->
     <rosparam command="load" file="$(find turtlebot3_slam)/config/gmapping_params.yaml" />
   </node>
 </launch>

@@ -42,6 +42,7 @@
         output="screen">
     <remap from="/imu" to="/flat_imu"/>
     <!--remap from="points2" to="/camera/depth/points" / -->
+    <remap from="scan" to="/scan_corrected"/>
   </node>
 
   <!-- cartographer_occupancy_grid_node -->
