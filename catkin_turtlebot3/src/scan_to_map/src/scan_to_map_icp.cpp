@@ -81,6 +81,8 @@ void ScanToMapICP::initParams()
   pnh_.param("Relocation_Maximum_Iterations", relocation_maximum_iterations_, 80.0);
   pnh_.param("Relocation_Score_Threshold_Max", relocation_score_threshold_max_, 0.15);
   pnh_.param("Loss_Num_Threshold", loss_num_threshold_, -1);
+  pnh_.param("SACIA_Max_Fitness_Score", sacia_max_fitness_score_, 5.0);
+  pnh_.param("SACIA_Max_Retries", sacia_max_retries_, 3);
   pnh_.param("SACIA_Max_Correspondence_Distance", sacia_max_correspondence_distance_, 0.5);
   pnh_.param("SACIA_Max_Iterations", sacia_max_iterations_, 100.0);
   pnh_.param("SACIA_Min_Sample_Distance", sacia_min_sample_distance_, 10);
@@ -178,8 +180,10 @@ void ScanToMapICP::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_msg
 
     if (ok)
     {
-      // 重定位成功 → 重置丢帧计数，发布位姿
+      // 重定位成功 → 重置丢帧计数、清空 costmap 障碍、发布位姿
       location_loss_num_ = 0;
+      std_srvs::Empty srv;
+      ros::service::call("/move_base/clear_costmaps", srv);
       location_publisher_.publish(isometryToPoseMsg(match_result_, scan_msg->header.stamp));
     }
     return;
@@ -355,10 +359,28 @@ bool ScanToMapICP::globalRelocalizationWithSACIA(
     const sensor_msgs::LaserScan::ConstPtr& scan_msg,
     PointCloudT::Ptr& cloud_map_msg)
 {
-  if (cloud_scan_->size() < 50 || cloud_map_msg->size() < 50)
+  // 直接用原始激光数据构建 lidar 坐标系点云，不经过 map_to_lidar_ 投影
+  PointCloudT::Ptr scan_raw(new PointCloudT);
+  scan_raw->height = 1;
+  scan_raw->is_dense = false;
+  for (size_t i = 0; i < scan_msg->ranges.size(); ++i)
+  {
+    float range = scan_msg->ranges[i];
+    if (!std::isfinite(range) || range <= scan_msg->range_min || range >= scan_msg->range_max)
+      continue;
+    double angle = scan_msg->angle_min + i * scan_msg->angle_increment;
+    PointT p;
+    p.x = range * cos(angle);
+    p.y = range * sin(angle);
+    p.z = 0.0f;
+    scan_raw->points.push_back(p);
+  }
+  scan_raw->width = scan_raw->points.size();
+
+  if (scan_raw->size() < 50 || cloud_map_msg->size() < 50)
   {
     ROS_WARN("SAC-IA: too few points (%zu scan, %zu map)",
-             cloud_scan_->size(), cloud_map_msg->size());
+             scan_raw->size(), cloud_map_msg->size());
     return false;
   }
 
@@ -368,12 +390,12 @@ bool ScanToMapICP::globalRelocalizationWithSACIA(
   normal_est.setSearchMethod(tree);
   normal_est.setRadiusSearch(0.1);
 
-  normal_est.setInputCloud(cloud_scan_);
+  normal_est.setInputCloud(scan_raw);
   normal_est.compute(*scan_normals);
 
   pcl::PointCloud<pcl::FPFHSignature33>::Ptr scan_features(new pcl::PointCloud<pcl::FPFHSignature33>);
   pcl::FPFHEstimation<PointT, pcl::Normal, pcl::FPFHSignature33> fpfh_est;
-  fpfh_est.setInputCloud(cloud_scan_);
+  fpfh_est.setInputCloud(scan_raw);
   fpfh_est.setInputNormals(scan_normals);
   fpfh_est.setSearchMethod(tree);
   fpfh_est.setRadiusSearch(0.2);
@@ -389,7 +411,7 @@ bool ScanToMapICP::globalRelocalizationWithSACIA(
   fpfh_est.compute(*map_features);
 
   pcl::SampleConsensusInitialAlignment<PointT, PointT, pcl::FPFHSignature33> sacia;
-  sacia.setInputSource(cloud_scan_);
+  sacia.setInputSource(scan_raw);
   sacia.setSourceFeatures(scan_features);
   sacia.setInputTarget(cloud_map_msg);
   sacia.setTargetFeatures(map_features);
@@ -403,6 +425,14 @@ bool ScanToMapICP::globalRelocalizationWithSACIA(
   if (!sacia.hasConverged())
   {
     ROS_WARN("SAC-IA did not converge");
+    return false;
+  }
+
+  float sac_score = sacia.getFitnessScore();
+  if (sac_score > sacia_max_fitness_score_)
+  {
+    ROS_WARN("SAC-IA score too high (%.6f > %.1f), retrying",
+             sac_score, sacia_max_fitness_score_);
     return false;
   }
 
@@ -422,124 +452,62 @@ bool ScanToMapICP::reLocationWithICP(Eigen::Isometry3d& trans,
   scanToPointCloudOnMap(scan_msg, cloud_scan_);
   pointCloudVoxelGridRemoval(cloud_scan_, voxel_grid_leaf_size_);
 
-  // Step 1: SAC-IA 全局匹配（不依赖初始位姿）
+  // Step 1: SAC-IA 全局匹配（重试直到成功或达到最大次数）
   Eigen::Isometry3d sacia_result = Eigen::Isometry3d::Identity();
-  if (globalRelocalizationWithSACIA(sacia_result, scan_msg, cloud_map_msg))
+  const int max_attempts = sacia_max_retries_;
+  bool sacia_ok = false;
+  for (int attempt = 0; attempt < max_attempts; attempt++)
   {
-    // SAC-IA 成功，用其结果做 ICP 精化
-    PointCloudT::Ptr transformed_scan(new PointCloudT);
-    pcl::transformPointCloud(*cloud_scan_, *transformed_scan, sacia_result.matrix().cast<float>());
-
-    pcl::IterativeClosestPoint<PointT, PointT> icp;
-    icp.setInputSource(transformed_scan);
-    icp.setInputTarget(cloud_map_msg);
-    icp.setMaxCorrespondenceDistance(5.0);
-    icp.setMaximumIterations(50);
-    icp.setTransformationEpsilon(1e-6);
-    icp.setEuclideanFitnessEpsilon(1e-6);
-
-    PointCloudT icp_final;
-    icp.align(icp_final);
-
-    if (icp.hasConverged() && icp.getFitnessScore() < relocation_score_threshold_max_)
-    {
-      Eigen::Affine3f icp_correction;
-      icp_correction = icp.getFinalTransformation();
-      Eigen::Isometry3d refined;
-      refined.matrix() = icp_correction.matrix().cast<double>();
-      trans = refined * sacia_result;
-
-      *cloud_scan_ = *transformed_scan;
-      pcl::transformPointCloud(*cloud_scan_, *cloud_scan_, icp_correction);
-
-      float score = icp.getFitnessScore();
-      relocate_initialpose_publisher_.publish(isometryToPoseMsg(trans, ros::Time::now()));
-      publishPointCloud(icp_pointcloud_publisher_, cloud_scan_, map_frame_, ros::Time::now());
-      publishLocationInfo(true, true, cloud_scan_->size(), 0.0, 0.0, score);
-      ROS_INFO("SAC-IA+ICP relocalization succeeded, score: %.6f", score);
-      return true;
-    }
-    ROS_WARN("SAC-IA succeeded but ICP refinement failed, falling back to rotation search");
+    sacia_ok = globalRelocalizationWithSACIA(sacia_result, scan_msg, cloud_map_msg);
+    if (sacia_ok) break;
+    ROS_WARN("SAC-IA attempt %d/%d failed, retrying...", attempt + 1, max_attempts);
   }
 
-  // Step 2: 36角度暴力搜索（后备）
-  double best_score = std::numeric_limits<double>::infinity();
-  Eigen::Affine3f best_icp = Eigen::Affine3f::Identity();
-  Eigen::Isometry3d best_initial = Eigen::Isometry3d::Identity();
-  PointCloudT::Ptr best_cloud(new PointCloudT);
-
-  for (double angle_deg = 0.0; angle_deg < 360.0; angle_deg += 10.0)
+  if (!sacia_ok)
   {
-    const double angle_rad = angle_deg * M_PI / 180.0;
-    Eigen::Affine3f initial_affine = Eigen::Affine3f::Identity();
-    initial_affine.rotate(Eigen::AngleAxisf(static_cast<float>(angle_rad), Eigen::Vector3f::UnitZ()));
-
-    PointCloudT::Ptr rotated_scan_cloud(new PointCloudT(*cloud_scan_));
-    rotatePointCloud(rotated_scan_cloud, initial_affine, robot_pose.cast<float>());
-    if (if_debug_)
-    {
-      publishPointCloud(rotate_pointcloud_publisher_, rotated_scan_cloud, map_frame_, ros::Time::now());
-    }
-
-    pcl::IterativeClosestPoint<PointT, PointT> icp;
-    icp.setInputSource(rotated_scan_cloud);
-    icp.setInputTarget(cloud_map_msg);
-    icp.setMaxCorrespondenceDistance(15.0);
-    icp.setMaximumIterations(static_cast<int>(relocation_maximum_iterations_));
-    icp.setTransformationEpsilon(1e-8);
-    icp.setEuclideanFitnessEpsilon(0.01);
-
-    PointCloudT::Ptr pointcloud_result(new PointCloudT);
-    icp.align(*pointcloud_result);
-    if (!icp.hasConverged())
-    {
-      continue;
-    }
-
-    Eigen::Affine3f transform;
-    transform = icp.getFinalTransformation();
-    float x = 0.0f, y = 0.0f, z = 0.0f, roll = 0.0f, pitch = 0.0f, yaw = 0.0f;
-    pcl::getTranslationAndEulerAngles(transform, x, y, z, roll, pitch, yaw);
-
-    const double trans_dist = std::hypot(x, y);
-    const double angle_dist = std::abs(yaw);
-    const double weighted_score = relocation_weight_score_ * icp.getFitnessScore() +
-                                  relocation_weight_distance_ * trans_dist +
-                                  relocation_weight_yaw_ * angle_dist;
-
-    Eigen::Isometry3d initial_transform = Eigen::Isometry3d::Identity();
-    initial_transform.rotate(Eigen::AngleAxisd(angle_rad, Eigen::Vector3d::UnitZ()));
-
-    Eigen::Isometry3d visual_pose = Eigen::Isometry3d::Identity();
-    visual_pose.matrix() = transform.matrix().cast<double>();
-    visual_pose = visual_pose * robot_pose * initial_transform;
-    relocate_visual_pose_publisher_.publish(isometryToPoseMsg(visual_pose, ros::Time::now()));
-
-    if (weighted_score < best_score)
-    {
-      best_score = weighted_score;
-      best_icp = transform;
-      best_initial = initial_transform;
-      best_cloud = pointcloud_result;
-    }
-  }
-
-  if (!std::isfinite(best_score) || best_score > relocation_score_threshold_max_)
-  {
-    publishLocationInfo(true, false, cloud_scan_->size(), 0.0, 0.0, best_score);
-    ROS_WARN("Relocalization failed, best score: %.6f", best_score);
+    ROS_ERROR("SAC-IA relocalization failed after %d attempts", max_attempts);
+    publishLocationInfo(true, false, cloud_scan_->size(), 0.0, 0.0,
+                        std::numeric_limits<double>::infinity());
     return false;
   }
 
-  Eigen::Isometry3d best_correction = Eigen::Isometry3d::Identity();
-  best_correction.matrix() = best_icp.matrix().cast<double>();
-  trans = best_correction * robot_pose * best_initial;
+  // SAC-IA 成功，用其结果做 ICP 精化
+  PointCloudT::Ptr transformed_scan(new PointCloudT);
+  pcl::transformPointCloud(*cloud_scan_, *transformed_scan, sacia_result.matrix().cast<float>());
 
-  relocate_initialpose_publisher_.publish(isometryToPoseMsg(trans, ros::Time::now()));
-  publishPointCloud(icp_pointcloud_publisher_, best_cloud, map_frame_, ros::Time::now());
-  publishLocationInfo(true, true, cloud_scan_->size(), 0.0, 0.0, best_score);
-  ROS_INFO("Relocalization succeeded, best score: %.6f", best_score);
-  return true;
+  pcl::IterativeClosestPoint<PointT, PointT> icp;
+  icp.setInputSource(transformed_scan);
+  icp.setInputTarget(cloud_map_msg);
+  icp.setMaxCorrespondenceDistance(5.0);
+  icp.setMaximumIterations(50);
+  icp.setTransformationEpsilon(1e-6);
+  icp.setEuclideanFitnessEpsilon(1e-6);
+
+  PointCloudT icp_final;
+  icp.align(icp_final);
+
+  if (icp.hasConverged() && icp.getFitnessScore() < relocation_score_threshold_max_)
+  {
+    Eigen::Affine3f icp_correction;
+    icp_correction = icp.getFinalTransformation();
+    Eigen::Isometry3d refined;
+    refined.matrix() = icp_correction.matrix().cast<double>();
+    trans = refined * sacia_result * base_to_lidar_.inverse();
+
+    *cloud_scan_ = *transformed_scan;
+    pcl::transformPointCloud(*cloud_scan_, *cloud_scan_, icp_correction);
+
+    float score = icp.getFitnessScore();
+    relocate_initialpose_publisher_.publish(isometryToPoseMsg(trans, ros::Time::now()));
+    publishPointCloud(icp_pointcloud_publisher_, cloud_scan_, map_frame_, ros::Time::now());
+    publishLocationInfo(true, true, cloud_scan_->size(), 0.0, 0.0, score);
+    ROS_INFO("SAC-IA+ICP relocalization succeeded, score: %.6f", score);
+    return true;
+  }
+  ROS_WARN("SAC-IA succeeded but ICP refinement failed");
+  publishLocationInfo(true, false, cloud_scan_->size(), 0.0, 0.0,
+                      icp.getFitnessScore());
+  return false;
 }
 
 void ScanToMapICP::occupancyGridToPointCloud(const nav_msgs::OccupancyGrid::ConstPtr& map_msg,

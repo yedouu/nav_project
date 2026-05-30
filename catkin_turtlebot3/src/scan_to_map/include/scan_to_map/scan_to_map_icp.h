@@ -17,6 +17,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <std_srvs/Empty.h>
 #include <std_srvs/Trigger.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -161,6 +162,8 @@ private:
   double relocation_weight_yaw_ = 0.5;
   double relocation_maximum_iterations_ = 80.0;
   double relocation_score_threshold_max_ = 0.15;
+  double sacia_max_fitness_score_ = 10.0;
+  int sacia_max_retries_ = 5;
   double sacia_max_correspondence_distance_ = 0.5;
   double sacia_max_iterations_ = 100;
   int sacia_min_sample_distance_ = 10;

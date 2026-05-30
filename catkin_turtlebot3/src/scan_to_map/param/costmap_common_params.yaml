@@ -1,6 +1,6 @@
 # 通用 costmap 参数（Waffle Pi）
-obstacle_range: 3.0
-raytrace_range: 3.5
+obstacle_range: 10.0
+raytrace_range: 11.0
 
 # Waffle Pi 足迹
 footprint: [[-0.205, -0.155], [-0.205, 0.155], [0.077, 0.155], [0.077, -0.155]]

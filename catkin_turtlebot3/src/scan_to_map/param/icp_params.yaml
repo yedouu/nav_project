@@ -40,6 +40,8 @@ Loss_Num_Threshold: 10            # 连续定位丢失次数阈值，超过此�
 Relocation_Score_Threshold_Max: 0.8  # 重定位成功阈值
 
 # SAC-IA 全局匹配参数
-SACIA_Max_Correspondence_Distance: 0.5   # 最大对应距离（m）
-SACIA_Max_Iterations: 100                # 最大迭代次数
-SACIA_Min_Sample_Distance: 10            # 最小采样距离
+SACIA_Max_Correspondence_Distance: 2.0   # 最大对应距离（m）
+SACIA_Max_Iterations: 500                # 最大迭代次数
+SACIA_Min_Sample_Distance: 3             # 最小采样距离
+SACIA_Max_Fitness_Score: 10.0             # 最大分数阈值，超过则重试
+SACIA_Max_Retries: 5                     # 分数不合格时重试次数
