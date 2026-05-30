@@ -38,3 +38,8 @@ Relocation_Weight_Yaw: 1         # 重定位评分 — 角度权重
 Relocation_Maximum_Iterations: 80   # 重定位 ICP 最大迭代次数
 Loss_Num_Threshold: 10            # 连续定位丢失次数阈值，超过此值自动触发重定位
 Relocation_Score_Threshold_Max: 0.8  # 重定位成功阈值
+
+# SAC-IA 全局匹配参数
+SACIA_Max_Correspondence_Distance: 0.5   # 最大对应距离（m）
+SACIA_Max_Iterations: 100                # 最大迭代次数
+SACIA_Min_Sample_Distance: 10            # 最小采样距离

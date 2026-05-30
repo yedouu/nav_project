@@ -23,6 +23,9 @@
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/registration/ia_ransac.h>
+#include <pcl/features/fpfh.h>
+#include <pcl/features/normal_3d.h>
 
 #include <scan_to_map/LocationInfo.h>
 
@@ -54,6 +57,9 @@ private:
   bool scanMatchWithICP(Eigen::Isometry3d& correction,
                         PointCloudT::Ptr& cloud_scan_msg,
                         PointCloudT::Ptr& cloud_map_msg);
+  bool globalRelocalizationWithSACIA(Eigen::Isometry3d& trans,
+                                     const sensor_msgs::LaserScan::ConstPtr& scan_msg,
+                                     PointCloudT::Ptr& cloud_map_msg);
   bool reLocationWithICP(Eigen::Isometry3d& trans,
                          const sensor_msgs::LaserScan::ConstPtr& scan_msg,
                          PointCloudT::Ptr& cloud_map_msg,
@@ -155,6 +161,9 @@ private:
   double relocation_weight_yaw_ = 0.5;
   double relocation_maximum_iterations_ = 80.0;
   double relocation_score_threshold_max_ = 0.15;
+  double sacia_max_correspondence_distance_ = 0.5;
+  double sacia_max_iterations_ = 100;
+  int sacia_min_sample_distance_ = 10;
 
   int loss_num_threshold_ = -1;
   int location_loss_num_ = 0;
