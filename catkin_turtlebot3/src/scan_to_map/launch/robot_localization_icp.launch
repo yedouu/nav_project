@@ -1,0 +1,8 @@
+<launch>
+  <!-- robot_localization EKF 节点 — 融合 ICP scan-to-map 定位 -->
+  <node pkg="robot_localization" type="ekf_localization_node"
+        name="ekf_localization_node_map" clear_params="true" respawn="true" output="log">
+    <remap from="set_pose" to="/initialpose"/>
+    <rosparam command="load" file="$(find scan_to_map)/param/robot_localization.yaml"/>
+  </node>
+</launch>

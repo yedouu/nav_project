@@ -1,0 +1,40 @@
+# scan_to_map ICP 定位参数
+if_debug: true
+save_pcd: false
+
+# 坐标系
+odom_frame: "odom"
+base_frame: "base_link"
+map_frame: "map"
+lidar_frame: "base_scan"
+
+# 匹配结果方差（发布给 robot_localization 的协方差）
+Variance_X: 0.2
+Variance_Y: 0.2
+Variance_Yaw: 0.1
+
+Use_TfTree_Always: true
+
+# ICP 定位参数
+SCORE_THRESHOLD_MAX: 0.3       # ICP fitness score 阈值，高于此值认为未收敛
+ANGLE_SPEED_THRESHOLD: 10      # 角速度阈值（rad/s），高速旋转时不发定位
+ANGLE_THRESHOLD: 0.01          # 最小变换角度（rad），小于此值不发
+DIST_THRESHOLD: 0.01           # 最小变换距离（m），小于此值不发
+ANGLE_UPPER_THRESHOLD: 10      # 最大角度变换（rad）
+Point_Quantity_THRESHOLD: 80  # 点云最少点数
+
+Maximum_Iterations: 50         # ICP 最大迭代次数
+
+ObstacleRemoval_Distance_Max: 2.0     # 动态障碍剔除距离阈值（m）
+VoxelGridRemoval_LeafSize: 0.05        # 体素滤波边长（m）
+
+# 定位禁区（可选）
+location_restricted_zone: []
+
+# 重定位参数
+Relocation_Weight_Score: 1       # 重定位评分 — 分数权重
+Relocation_Weight_Distance: 1    # 重定位评分 — 距离权重
+Relocation_Weight_Yaw: 1         # 重定位评分 — 角度权重
+Relocation_Maximum_Iterations: 80   # 重定位 ICP 最大迭代次数
+Loss_Num_Threshold: 10            # 连续定位丢失次数阈值，超过此值自动触发重定位
+Relocation_Score_Threshold_Max: 0.8  # 重定位成功阈值

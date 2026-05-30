@@ -1,0 +1,55 @@
+<launch>
+  <!-- 参数：地图文件路径 -->
+  <arg name="map_file"
+       default="$(env HOME)/nav_project/xtdrone_maps/indoor3.yaml"/>
+  <arg name="rviz" default="true"/>
+  <arg name="model" default="waffle_pi"/>
+  <arg name="robot" default="false"/>
+
+  <!-- TurtleBot3 模型参数（给 RViz RobotModel 用） -->
+  <env name="TURTLEBOT3_MODEL" value="$(arg model)"/>
+  <param name="robot_description"
+         command="$(find xacro)/xacro $(find turtlebot3_description)/urdf/turtlebot3_$(arg model).urdf.xacro"/>
+
+  <!-- 先验地图服务器 -->
+  <node name="map_server" pkg="map_server" type="map_server"
+        args="$(arg map_file)" output="screen">
+    <param name="frame_id" value="map"/>
+  </node>
+
+  <!-- ICP scan-to-map 定位节点 -->
+  <node name="scan_to_map_icp" pkg="scan_to_map" type="scan_to_map_icp_node"
+        output="screen" respawn="true">
+    <rosparam file="$(find scan_to_map)/param/icp_params.yaml" command="load"/>
+  </node>
+
+  <!-- robot_localization EKF 融合 -->
+  <include file="$(find scan_to_map)/launch/robot_localization_icp.launch"/>
+
+  <!-- robot_state_publisher（只有连接了真车或 Gazebo 时才需要） -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"
+        if="$(arg robot)">
+    <param name="publish_frequency" value="50.0"/>
+  </node>
+
+  <!-- move_base + TEB 局部避障 + 全局规划 -->
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <rosparam file="$(find scan_to_map)/param/costmap_common_params.yaml" command="load" ns="global_costmap"/>
+    <rosparam file="$(find scan_to_map)/param/costmap_common_params.yaml" command="load" ns="local_costmap"/>
+    <rosparam file="$(find scan_to_map)/param/local_costmap_params.yaml" command="load"/>
+    <rosparam file="$(find scan_to_map)/param/global_costmap_params.yaml" command="load"/>
+    <rosparam file="$(find scan_to_map)/param/teb_local_planner_params.yaml" command="load"/>
+
+    <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+    <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS"/>
+    <param name="planner_frequency" value="1.0"/>
+    <param name="controller_frequency" value="5.0"/>
+    <param name="clearing_rotation_allowed" value="true"/>
+  </node>
+
+  <!-- RViz 可视化 -->
+  <node name="rviz" pkg="rviz" type="rviz"
+        args="-d $(find scan_to_map)/rviz/scan_to_map.rviz"
+        output="screen" if="$(arg rviz)"/>
+
+</launch>
