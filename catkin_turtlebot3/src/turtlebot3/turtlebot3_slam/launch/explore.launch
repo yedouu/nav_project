@@ -1,0 +1,33 @@
+<launch>
+  <node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen">
+    <!-- 机器人底盘坐标系 -->
+    <param name="robot_base_frame" value="base_footprint"/>
+
+    <!-- 直接从 Cartographer 的 /map 话题获取地图 -->
+    <param name="costmap_topic" value="/map"/>
+    <param name="costmap_updates_topic" value="/map_updates"/>
+
+    <!-- 可视化 frontier 点 -->
+    <param name="visualize" value="true"/>
+
+    <!-- 探索目标重规划频率 (Hz) — 0.5 = 每2秒算一次新目标 -->
+    <param name="planner_frequency" value="0.5"/>
+
+    <!-- 无进展超时 (秒) — 15秒没进展就放弃当前目标 -->
+    <param name="progress_timeout" value="15.0"/>
+
+    <!-- 前沿评分权重 -->
+    <!-- 距离代价：越近的 frontier 分越高（值越大越偏向近的） -->
+    <param name="potential_scale" value="2.0"/>
+    <!-- 朝向代价：不关心机器人朝向 -->
+    <param name="orientation_scale" value="0.0"/>
+    <!-- 信息增益：frontier 越大分越高 -->
+    <param name="gain_scale" value="1.0"/>
+
+    <!-- TF 容差 -->
+    <param name="transform_tolerance" value="1.0"/>
+
+    <!-- 最小前沿面积 (m²) — 小于这个面积的 frontier 忽略 -->
+    <param name="min_frontier_size" value="0.02"/>
+  </node>
+</launch>

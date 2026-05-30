@@ -1,0 +1,24 @@
+# ROS build artifacts
+catkin_turtlebot3/build/
+catkin_turtlebot3/devel/
+catkin_cartographer/build_isolated/
+catkin_cartographer/devel_isolated/
+catkin_cartographer/install_isolated/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# ROS logs
+*.ros/
+
+# Temp files
+*.log
+*.swp
+*.swo
+*~
+
+# System
+.DS_Store
+Thumbs.db

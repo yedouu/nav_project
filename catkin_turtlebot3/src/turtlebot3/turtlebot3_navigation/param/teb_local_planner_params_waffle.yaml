@@ -1,0 +1,89 @@
+TebLocalPlannerROS:
+
+ odom_topic: odom
+ map_frame: map
+
+ # Trajectory
+ teb_autosize: true
+ dt_ref: 0.3
+ dt_hysteresis: 0.1
+ global_plan_overwrite_orientation: true
+ allow_init_with_backwards_motion: false
+ max_global_plan_lookahead_dist: 3.0
+ global_plan_viapoint_sep: -1.0
+ exact_arc_length: false
+ force_reinit_new_goal_dist: 1.0
+ feasibility_check_no_poses: 5
+
+ # Robot
+ max_vel_x: 1.5
+ max_vel_x_backwards: 0.5
+ max_vel_theta: 1.82
+ acc_lim_x: 3.0
+ acc_lim_theta: 3.2
+ min_turning_radius: 0.0
+ footprint_model:
+   type: "circular"
+   radius: 0.18
+
+ # Goal Tolerance
+ xy_goal_tolerance: 0.10
+ yaw_goal_tolerance: 0.17
+ free_goal_vel: false
+ complete_global_plan: true
+
+ # Obstacles
+ min_obstacle_dist: 0.20
+ inflation_dist: 0.15
+ include_costmap_obstacles: true
+ costmap_obstacles_behind_robot_dist: 1.0
+ obstacle_poses_affected: 30
+ dynamic_obstacle_inflation_dist: 0.6
+ include_dynamic_obstacles: true
+
+ # Optimization
+ no_inner_iterations: 5
+ no_outer_iterations: 4
+ optimization_activate: true
+ optimization_verbose: false
+ penalty_epsilon: 0.1
+ weight_max_vel_x: 2.0
+ weight_max_vel_theta: 1.0
+ weight_acc_lim_x: 1.0
+ weight_acc_lim_theta: 1.0
+ weight_kinematics_nh: 1000.0
+ weight_kinematics_forward_drive: 1000.0
+ weight_kinematics_turning_radius: 1.0
+ weight_optimaltime: 5.0
+ weight_obstacle: 50.0
+ weight_dynamic_obstacle: 10.0
+ weight_viapoint: 1.0
+ weight_adapt_factor: 2.0
+
+ # Homotopy Class Planning
+ enable_homotopy_class_planning: false
+ enable_multiple_homotopy_classes: false
+ selection_via_homotopy_class_cost: false
+ simple_exploration: false
+ max_global_plan_lookahead_dist: 3.0
+ roadmap_graph_no_samples: 15
+ roadmap_graph_area_width: 5.0
+ h_signature_prescaler: 0.5
+ h_signature_threshold: 0.1
+ obstacle_keypoint_offset: 0.1
+ obstacle_heading_threshold: 0.45
+ switching_blocking_period: 0.0
+ viapoints_all_candidates: true
+ delete_detours_backwards: true
+ max_ratio_detours_duration_best_duration: 3.0
+ visualize_hc_graph: false
+ visualize_with_time_as_z_axis_scale: 0.0
+
+ # Recovery
+ shrink_horizon_backup: true
+ shrink_horizon_min_duration: 10.0
+ oscillation_recovery: true
+ oscillation_v_theta_eps: 0.1
+ oscillation_phi_eps: 0.2
+ oscillation_filter_duration: 10.0
+ oscillation_filter_min_duration: 5.0
