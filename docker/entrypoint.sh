@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# nav_project + DQN_ROS Docker 统一入口脚本
+# nav_project Docker 统一入口脚本
 # 自动 source ROS + Cartographer + 项目工作区
 # ============================================================
 
@@ -28,17 +28,11 @@ if [ -f /root/nav_project/catkin_cartographer/install_isolated/setup.bash ]; the
   echo "[entrypoint] sourced Cartographer project workspace"
 fi
 
-# 5. DQN_ROS 工作区 (强化学习)
-if [ -f /root/nav_project/dqn_ros_ws/devel/setup.bash ]; then
-  source /root/nav_project/dqn_ros_ws/devel/setup.bash --extend
-  echo "[entrypoint] sourced DQN_ROS workspace"
-fi
-
 export TURTLEBOT3_MODEL=${TURTLEBOT3_MODEL:-waffle_pi}
 export GAZEBO_MODEL_DATABASE_URI=${GAZEBO_MODEL_DATABASE_URI:-""}
 
 # Gazebo 模型路径: TurtleBot3 + nav_project indoor 世界
-TURTLEBOT3_MODELS=/root/nav_project/dqn_ros_ws/src/turtlebot3/turtlebot3_simulations/turtlebot3_gazebo/models
+TURTLEBOT3_MODELS=/root/nav_project/catkin_turtlebot3/src/turtlebot3/turtlebot3_simulations/turtlebot3_gazebo/models
 export GAZEBO_MODEL_PATH=${TURTLEBOT3_MODELS}:${GAZEBO_MODEL_PATH:-/usr/share/gazebo-11/models}
 export GAZEBO_RESOURCE_PATH=/root/nav_project/xtdrone_worlds:/root/nav_project/xtdrone_maps:${GAZEBO_RESOURCE_PATH}
 

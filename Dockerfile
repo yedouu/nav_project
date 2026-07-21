@@ -1,12 +1,11 @@
 # ============================================================
-# ROS Noetic + Cartographer + TurtleBot3 + DQN_ROS 统一镜像
+# ROS Noetic + Cartographer + TurtleBot3 导航镜像
 # nav_project: https://github.com/yedouu/nav_project
-# DQN_ROS:     https://github.com/GabryV00/DQN_ROS
 # ============================================================
 
 FROM ros:noetic-robot
 
-LABEL description="ROS Noetic + Cartographer SLAM + TurtleBot3 + DQN Reinforcement Learning"
+LABEL description="ROS Noetic + Cartographer SLAM + TurtleBot3 Navigation"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TERM=xterm
@@ -118,18 +117,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ============================================================
-# Stage 9: DQN_ROS 依赖 (PyTorch 2.0.1 + Gym, Python 3.8)
-# ============================================================
-RUN pip3 install --no-cache-dir "typing-extensions<4.10" && \
-    pip3 install --no-cache-dir \
-      torch==2.0.1 torchvision==0.15.2 \
-      --extra-index-url https://download.pytorch.org/whl/cpu
-
-RUN pip3 install --no-cache-dir \
-      gym==0.21.0 matplotlib numpy rospkg pyyaml GitPython defusedxml
-
-# ============================================================
-# Stage 10: 项目环境入口
+# Stage 9: 项目环境入口
 # ============================================================
 RUN mkdir -p /root/nav_project
 

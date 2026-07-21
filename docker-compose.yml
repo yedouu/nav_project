@@ -1,8 +1,12 @@
 # ============================================================
-# nav_project + DQN_ROS 统一 Docker Compose 部署
+# nav_project 模块化 Docker Compose 部署
+# 用法:
+#   建图:      docker compose --profile gazebo --profile slam --profile teleop up -d
+#   已知地图:  docker compose --profile gazebo --profile navigation up -d
+#   一键全栈:  docker compose --profile all up -d
+#   交互Shell: docker compose run --rm shell bash
 # ============================================================
 
-version: "3.8"
 
 x-common: &common
   image: ${IMAGE_NAME:-nav_project}:${IMAGE_TAG:-latest}
@@ -22,69 +26,95 @@ x-common: &common
     - ./catkin_cartographer:/root/nav_project/catkin_cartographer:rw
     - ./xtdrone_maps:/root/nav_project/xtdrone_maps:rw
     - ./xtdrone_worlds:/root/nav_project/xtdrone_worlds:ro
-    - ./dqn_ros:/root/nav_project/dqn_ros:rw
     - gazebo-cache:/root/.gazebo
   stdin_open: true
   tty: true
   runtime: nvidia
 
 services:
-  # ---- 一键全栈: Gazebo + Cartographer SLAM + 遥控 ----
-  all-in-one:
+  # ============================================================
+  # 基础模块 (可独立启动)
+  # ============================================================
+
+  # Gazebo 仿真 + XTDrone 世界 + TurtleBot3 机器人
+  gazebo:
     <<: *common
-    container_name: nav-all-in-one
+    container_name: nav-gazebo
     command: >
       bash -c "
-      echo '=== 启动 Gazebo 仿真 ===' &&
-      roslaunch turtlebot3_gazebo turtlebot3_world.launch &
-      sleep 12 &&
-      echo '=== 启动 Cartographer SLAM ===' &&
-      roslaunch turtlebot3_slam turtlebot3_cartographer.launch
-        configuration_basename:=turtlebot3_lds_2d_gazebo.launch &
-      sleep 5 &&
-      echo '=== 启动键盘遥控 (wasd 控制) ===' &&
-      roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch &
-      wait
+      echo '[gazebo] 启动 Gazebo + XTDrone 世界...' ;
+      roslaunch /root/nav_project/catkin_turtlebot3/src/turtlebot3/turtlebot3_slam/launch/xtdrone_world.launch
+        world_name:=${WORLD_FILE:-/root/nav_project/xtdrone_worlds/indoor3.world}
       "
     profiles:
-      - standalone
+      - all
+      - mapping
       - nav
+      - gazebo
 
-  # ---- DQN 强化学习训练 ----
-  dqn-train:
+  # Cartographer SLAM 建图
+  slam:
     <<: *common
-    container_name: nav-dqn-train
+    container_name: nav-slam
     command: >
       bash -c "
-      echo '=== 启动 Gazebo 仿真 ===' &&
-      roslaunch turtlebot3_gazebo turtlebot3_world.launch &
-      sleep 12 &&
-      echo '=== 启动 DQN 训练 ===' &&
-      roslaunch my_turtlebot3_openai_example start_training.launch &
-      wait
+      sleep 8 ;
+      echo '[slam] 启动 Cartographer SLAM...' ;
+      roslaunch turtlebot3_slam turtlebot3_cartographer.launch
+        configuration_basename:=turtlebot3_lds_2d_gazebo.lua
       "
     profiles:
-      - dqn
-      - train
+      - all
+      - mapping
+      - slam
 
-  # ---- DQN 训练 (V2) ----
-  dqn-train-v2:
+  # ICP 定位 + TEB 导航 + RViz (需要先验地图)
+  navigation:
     <<: *common
-    container_name: nav-dqn-train-v2
+    container_name: nav-navigation
     command: >
       bash -c "
-      echo '=== 启动 Gazebo 仿真 ===' &&
-      roslaunch turtlebot3_gazebo turtlebot3_world.launch &
-      sleep 12 &&
-      echo '=== 启动 DQN 训练 V2 ===' &&
-      roslaunch my_turtlebot3_openai_example start_training_v2.launch &
-      wait
+      sleep 8 ;
+      echo '[navigation] 启动 ICP 定位 + TEB 导航 + RViz...' ;
+      roslaunch scan_to_map scan_to_map.launch
+        map_file:=${MAP_FILE:-/root/nav_project/xtdrone_maps/indoor3.yaml}
       "
     profiles:
-      - dqn
-      - train-v2
+      - all
+      - nav
+      - navigation
 
-  # ---- 交互式 Shell (手动操作) ----
+  # 键盘遥控
+  teleop:
+    <<: *common
+    container_name: nav-teleop
+    command: >
+      bash -c "
+      echo '[teleop] 键盘遥控 (WASD 控制)...' ;
+      roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch
+      "
+    profiles:
+      - all
+      - mapping
+      - teleop
+
+  # RViz 可视化 (独立打开)
+  rviz:
+    <<: *common
+    container_name: nav-rviz
+    command: >
+      bash -c "
+      echo '[rviz] 启动 RViz...' ;
+      rosrun rviz rviz -d /root/nav_project/catkin_turtlebot3/src/scan_to_map/rviz/scan_to_map.rviz
+      "
+    profiles:
+      - viz
+      - rviz
+
+  # ============================================================
+  # 交互式 Shell
+  # ============================================================
+
   shell:
     <<: *common
     container_name: nav-shell

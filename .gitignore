@@ -19,10 +19,6 @@ __pycache__/
 *.swo
 *~
 
-# DQN_ROS build (编译产物不跟踪)
-dqn_ros_ws/build/
-dqn_ros_ws/devel/
-
 # System
 .DS_Store
 Thumbs.db
