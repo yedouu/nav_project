@@ -1,0 +1,96 @@
+# ============================================================
+# nav_project + DQN_ROS 统一 Docker Compose 部署
+# ============================================================
+
+version: "3.8"
+
+x-common: &common
+  image: ${IMAGE_NAME:-nav_project}:${IMAGE_TAG:-latest}
+  network_mode: host
+  environment:
+    DISPLAY: ${DISPLAY:-:0}
+    QT_X11_NO_MITSHM: "1"
+    NVIDIA_VISIBLE_DEVICES: all
+    NVIDIA_DRIVER_CAPABILITIES: all
+    TURTLEBOT3_MODEL: waffle_pi
+    GAZEBO_MODEL_DATABASE_URI: ""
+  volumes:
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    - ${XDG_RUNTIME_DIR:-/run/user/1000}:/tmp/xdg-runtime:rw
+    - ${HOME}/.Xauthority:/root/.Xauthority:rw
+    - ./catkin_turtlebot3:/root/nav_project/catkin_turtlebot3:rw
+    - ./catkin_cartographer:/root/nav_project/catkin_cartographer:rw
+    - ./xtdrone_maps:/root/nav_project/xtdrone_maps:rw
+    - ./xtdrone_worlds:/root/nav_project/xtdrone_worlds:ro
+    - ./dqn_ros:/root/nav_project/dqn_ros:rw
+    - gazebo-cache:/root/.gazebo
+  stdin_open: true
+  tty: true
+  runtime: nvidia
+
+services:
+  # ---- 一键全栈: Gazebo + Cartographer SLAM + 遥控 ----
+  all-in-one:
+    <<: *common
+    container_name: nav-all-in-one
+    command: >
+      bash -c "
+      echo '=== 启动 Gazebo 仿真 ===' &&
+      roslaunch turtlebot3_gazebo turtlebot3_world.launch &
+      sleep 12 &&
+      echo '=== 启动 Cartographer SLAM ===' &&
+      roslaunch turtlebot3_slam turtlebot3_cartographer.launch
+        configuration_basename:=turtlebot3_lds_2d_gazebo.launch &
+      sleep 5 &&
+      echo '=== 启动键盘遥控 (wasd 控制) ===' &&
+      roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch &
+      wait
+      "
+    profiles:
+      - standalone
+      - nav
+
+  # ---- DQN 强化学习训练 ----
+  dqn-train:
+    <<: *common
+    container_name: nav-dqn-train
+    command: >
+      bash -c "
+      echo '=== 启动 Gazebo 仿真 ===' &&
+      roslaunch turtlebot3_gazebo turtlebot3_world.launch &
+      sleep 12 &&
+      echo '=== 启动 DQN 训练 ===' &&
+      roslaunch my_turtlebot3_openai_example start_training.launch &
+      wait
+      "
+    profiles:
+      - dqn
+      - train
+
+  # ---- DQN 训练 (V2) ----
+  dqn-train-v2:
+    <<: *common
+    container_name: nav-dqn-train-v2
+    command: >
+      bash -c "
+      echo '=== 启动 Gazebo 仿真 ===' &&
+      roslaunch turtlebot3_gazebo turtlebot3_world.launch &
+      sleep 12 &&
+      echo '=== 启动 DQN 训练 V2 ===' &&
+      roslaunch my_turtlebot3_openai_example start_training_v2.launch &
+      wait
+      "
+    profiles:
+      - dqn
+      - train-v2
+
+  # ---- 交互式 Shell (手动操作) ----
+  shell:
+    <<: *common
+    container_name: nav-shell
+    profiles:
+      - shell
+
+volumes:
+  gazebo-cache:
+    driver: local

@@ -1,0 +1,5 @@
+<launch>
+    <!-- V2: DQN with improved reward + reduced observation -->
+    <rosparam command="load" file="$(find my_turtlebot3_openai_example)/config/my_turtlebot3_openai_deepqlearn_params_v2.yaml" />
+    <node pkg="my_turtlebot3_openai_example" name="turtlebot3_world_v2" type="start_deepqlearning.py" output="screen"/>
+</launch>

@@ -1,0 +1,17 @@
+turtlebot3: #namespace
+
+    task_and_robot_environment_name: 'TurtleBot3World-v2'
+    ros_ws_abspath: "/root/nav_project/dqn_ros_ws"
+    pos_step: 0.016
+
+    #dqn parameters (V3 优化版: Double DQN + 轻量网络 + 稳定参数)
+    gamma: 0.999
+    epsilon_start: 0.9
+    epsilon_end: 0.05
+    epsilon_decay: 8000       # V3 原版15000太慢，降至8000: EP200 ε≈0.36, EP300 ε≈0.24
+    n_episodes: 300
+    target_update: 100        # V1/V2:50 → 100，Double DQN 需要更稳定
+    batch_size: 128           # V1:32 V2:64 → 128，更大批次更稳定
+
+    running_step: 0.06
+    learning_rate: 0.001
